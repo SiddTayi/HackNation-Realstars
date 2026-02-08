@@ -64,7 +64,7 @@ def create_tables():
     cursor.execute("""
         CREATE TABLE ticket (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticket_number VARCHAR(50) UNIQUE NOT NULL,
+            ticket_id VARCHAR(50) UNIQUE NOT NULL,
             conversation_id VARCHAR(100) NOT NULL,
             channel VARCHAR(50),
             customer_role VARCHAR(100),
@@ -85,7 +85,7 @@ def create_tables():
             FOREIGN KEY (assigned_to) REFERENCES support_agent(id)
         )
     """)
-    cursor.execute("CREATE INDEX idx_ticket_number ON ticket(ticket_number)")
+    cursor.execute("CREATE INDEX idx_ticket_id ON ticket(ticket_id)")
     cursor.execute("CREATE INDEX idx_ticket_status ON ticket(status)")
     cursor.execute("CREATE INDEX idx_ticket_created_by ON ticket(created_by)")
     cursor.execute(

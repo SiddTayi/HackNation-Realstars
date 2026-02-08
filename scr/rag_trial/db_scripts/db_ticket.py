@@ -16,42 +16,37 @@ def get_db_path():
 
 def last_row_db():
     """
-    Get the next available ticket number.
+    Get the next available ticket ID.
 
     Returns:
-        str: Next ticket number in format 'CASE-YYYY-XXXX' (e.g., 'CASE-2026-0001')
+        str: Next ticket ID in format 'CS-XXXXXXXX' (e.g., 'CS-12345678')
     """
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Get current year
-    current_year = datetime.now().year
-
-    # Get highest ticket number for current year
+    # Get all ticket_ids and find the max numerically
     cursor.execute("""
-        SELECT ticket_number 
+        SELECT ticket_id 
         FROM ticket 
-        WHERE ticket_number LIKE ? 
-        ORDER BY ticket_number DESC 
-        LIMIT 1
-    """, (f"CASE-{current_year}-%",))
+        WHERE ticket_id LIKE 'CS-%'
+    """)
 
-    result = cursor.fetchone()
+    results = cursor.fetchall()
     conn.close()
 
-    if result:
-        last_number = result[0]
-        # Extract number from 'CASE-2026-0001' -> 1
-        last_num = int(last_number.split('-')[2])
-        new_num = last_num + 1
+    if results:
+        # Extract numeric parts and find max
+        numbers = [int(row[0].split('-')[1]) for row in results]
+        max_num = max(numbers)
+        new_num = max_num + 1
     else:
-        # No tickets for this year, start from 1
+        # No tickets yet, start from 1
         new_num = 1
 
-    # Format as 'CASE-2026-0001'
-    new_ticket_number = f"CASE-{current_year}-{new_num:04d}"
-    return new_ticket_number
+    # Format as 'CS-XXXXXXXX'
+    new_ticket_id = f"CS-{new_num:08d}"
+    return new_ticket_id
 
 
 def retrieve_ticket(ticket_id):
@@ -78,12 +73,12 @@ def retrieve_ticket(ticket_id):
     return None
 
 
-def retrieve_ticket_by_number(ticket_number):
+def retrieve_ticket_by_id_string(ticket_id):
     """
-    Retrieve a ticket by its ticket_number.
+    Retrieve a ticket by its ticket_id string.
 
     Args:
-        ticket_number (str): Ticket number (e.g., 'CASE-2026-0001')
+        ticket_id (str): Ticket ID (e.g., 'CS-12345678')
 
     Returns:
         dict: Ticket data with all columns, or None if not found
@@ -94,7 +89,7 @@ def retrieve_ticket_by_number(ticket_number):
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT * FROM ticket WHERE ticket_number = ?", (ticket_number,))
+        "SELECT * FROM ticket WHERE ticket_id = ?", (ticket_id,))
     row = cursor.fetchone()
     conn.close()
 
@@ -115,7 +110,7 @@ def insert_ticket(**kwargs):
 
     Example:
         insert_ticket(
-            ticket_number='CASE-2026-0001',
+            ticket_id='CS-12345678',
             conversation_id='CONV-12345',
             channel='Chat',
             customer_role='Property Manager',
@@ -223,15 +218,15 @@ if __name__ == "__main__":
     print("Ticket Database Helper Functions")
     print("=" * 50)
 
-    # Test 1: Get next ticket number
-    print("\n1. Get next ticket number:")
+    # Test 1: Get next ticket ID
+    print("\n1. Get next ticket ID:")
     next_ticket = last_row_db()
     print(f"   Next available: {next_ticket}")
 
     # Test 2: Insert a ticket (commented out to avoid accidental inserts)
     # print("\n2. Insert ticket (example - not executed):")
     # print("   ticket_id = insert_ticket(")
-    # print("       ticket_number='CASE-2026-0001',")
+    # print("       ticket_id='CS-12345678',")
     # print("       conversation_id='CONV-12345',")
     # print("       channel='Chat',")
     # print("       status='pending',")
