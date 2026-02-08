@@ -14,6 +14,10 @@ from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
 
+# Add parent directory to path for db_scripts import
+sys.path.append(str(Path(__file__).parent.parent))
+from db_scripts.db_ticket import last_row_db
+
 # Load environment variables
 load_dotenv()
 
@@ -200,7 +204,7 @@ Respond ONLY with the JSON object, no other text."""
                 "reasoning": "Unable to parse judge response"
             }
 
-    def _format_output(self, query, retrieved_doc, generated_response, relevancy_result):
+    def _format_output(self, query, retrieved_doc, generated_response, relevancy_result, new_ticket_id):
         """
         Format the output in the specified structure.
 
@@ -209,6 +213,7 @@ Respond ONLY with the JSON object, no other text."""
             retrieved_doc: Retrieved document data
             generated_response: LLM-generated response
             relevancy_result: Relevancy scoring result
+            new_ticket_id: Newly generated ticket ID from last_row_db()
 
         Returns:
             Formatted dictionary
@@ -234,7 +239,8 @@ Respond ONLY with the JSON object, no other text."""
             "RAG_response": {
                 "query": query,
                 "generated_answer": generated_response,
-                "ticket_id": str(data.get('Ticket_Number', 'N/A')),
+                "ticket_id": new_ticket_id,
+                "refered_ticket_id": str(data.get('Ticket_Number', 'N/A')),
                 "created_date": str(data.get('Created_Date', 'N/A')),
                 "conversation_id": str(data.get('Conversation_ID', 'N/A')),
                 "first_tier_agent_name": str(data.get('Agent_Name', 'N/A')),
@@ -288,6 +294,10 @@ Respond ONLY with the JSON object, no other text."""
         print(f"Top K: {top_k}")
         print(f"{'='*80}\n")
 
+        # Generate new ticket ID
+        new_ticket_id = last_row_db()
+        print(f"Generated new ticket ID: {new_ticket_id}\n")
+
         # Step 1: Retrieve similar documents
         print("Step 1: Retrieving similar documents...")
         retrieved_docs = self._retrieve_similar_documents(query, top_k)
@@ -316,7 +326,8 @@ Respond ONLY with the JSON object, no other text."""
                 query,
                 doc,
                 generated_response,
-                relevancy_result
+                relevancy_result,
+                new_ticket_id
             )
 
             results.append(formatted_output)
