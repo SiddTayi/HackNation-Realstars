@@ -1,13 +1,17 @@
-# Documentation files
-GENERATION_AGENT_README.md
-GENERATION_AGENT_SUMMARY.md
-GENERATION_AGENT_QUICK_REF.md
+# Generated documentation files
+SCHEMA_FIX_SUMMARY.md
 README_SELF_HEALING.md
 IMPLEMENTATION_SUMMARY.md
 QUICK_START.md
 DB_HELPERS_README.md
 DB_FUNCTIONS_UPDATE.md
 3_TABLES_SUMMARY.md
+backend/scr/rag/GENERATION_AGENT_README.md
+backend/scr/rag/GENERATION_AGENT_SUMMARY.md
+backend/scr/rag/GENERATION_AGENT_QUICK_REF.md
+backend/scr/rag/QUERY_SYSTEM_README.md
+backend/scr/rag/README.md
+backend/scr/rag/STRUCTURE.md
 
 # Python
 __pycache__/
