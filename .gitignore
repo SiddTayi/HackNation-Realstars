@@ -1,0 +1,57 @@
+# Documentation files
+GENERATION_AGENT_README.md
+GENERATION_AGENT_SUMMARY.md
+GENERATION_AGENT_QUICK_REF.md
+README_SELF_HEALING.md
+IMPLEMENTATION_SUMMARY.md
+QUICK_START.md
+DB_HELPERS_README.md
+DB_FUNCTIONS_UPDATE.md
+3_TABLES_SUMMARY.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Database backups
+*.db.backup
+*.db.bak
+
+# Logs
+*.log

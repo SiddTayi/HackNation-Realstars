@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 
 # Read Excel file
-excel_path = "/Users/faseehahmed26/Desktop/FaseehWorld/Interview Prep/realpage/Hackathon/HackNation-Realstars/data/final_ver3.xlsx"
+excel_path = "/HackNation-Realstars/data/final_ver3.xlsx"
 df = pd.read_excel(excel_path)
 
 # Remove duplicates based on Ticket_Number
@@ -23,8 +23,11 @@ for _, row in df.iterrows():
             INSERT OR IGNORE INTO ticket (
                 ticket_id, conversation_id, channel, customer_role,
                 product, transcript, first_tier_agent, original_resolution,
-                status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                status, category, issue_summary, sentiment, priority, tier,
+                module_generated_kb, subject, description, root_cause,
+                tags_generated_kb, kb_article_id, script_id, 
+                generated_kb_article_id, source_id, answer_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             row['Ticket_Number'],
             row['Conversation_ID'],
@@ -33,7 +36,23 @@ for _, row in df.iterrows():
             row.get('Product_x'),
             row.get('Transcript'),
             row.get('Agent_Name'),
-            row.get('Resolution')
+            row.get('Resolution'),
+            'pending',  # status
+            row.get('Category_x'),
+            row.get('Issue_Summary'),
+            row.get('Sentiment'),
+            row.get('Priority'),
+            row.get('Tier'),
+            row.get('Module_generated_kb'),
+            row.get('Subject'),
+            row.get('Description'),
+            row.get('Root_Cause'),
+            row.get('Tags_generated_kb'),
+            row.get('KB_Article_ID_x'),
+            row.get('Script_ID'),
+            row.get('Generated_KB_Article_ID'),
+            row.get('Source_ID'),
+            row.get('Answer_Type')
         ))
         imported_count += 1
     except Exception as e:
