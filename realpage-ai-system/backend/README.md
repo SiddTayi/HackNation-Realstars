@@ -238,43 +238,194 @@ Approved resolutions added to knowledge base
 
 ## API Endpoints
 
-### Authentication
+**Base URL:** `http://localhost:8000/api`
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/api/auth/login` | Login (returns JWT) | No |
-| POST | `/api/auth/register` | Register new user | No |
-| POST | `/api/auth/refresh` | Refresh JWT token | Yes |
-| GET | `/api/auth/me` | Get current user info | Yes |
+**Authentication Header:** `Authorization: Bearer <jwt_token>`
 
-### Tickets (Cases)
+---
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/api/tickets/upload` | Upload Excel & create tickets | Yes (User) |
-| GET | `/api/tickets` | List all tickets (filtered by role) | Yes |
-| GET | `/api/tickets/{id}` | Get ticket details | Yes |
-| GET | `/api/tickets/pending` | Get pending tickets | Yes (Agent) |
-| GET | `/api/tickets/resolved` | Get resolved tickets | Yes (Agent) |
-| PATCH | `/api/tickets/{id}/status` | Update ticket status | Yes (Agent) |
-| PATCH | `/api/tickets/{id}/resolution` | Edit resolution | Yes (Agent) |
-| POST | `/api/tickets/{id}/approve` | Approve ticket (creates knowledge) | Yes (Agent) |
-| POST | `/api/tickets/{id}/reject` | Reject ticket | Yes (Agent) |
+### Authentication (2 endpoints)
 
-### Knowledge Base
+| Method | Endpoint | Request Body | Response | Auth |
+|--------|----------|--------------|----------|------|
+| `POST` | `/api/auth/login` | `{ email, password, user_type }` | `{ token, user: {id, name, email, role} }` | No |
+| `POST` | `/api/auth/logout` | - | `{ success: true }` | Yes |
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/api/knowledge` | List knowledge entries | Yes |
-| GET | `/api/knowledge/{id}` | Get knowledge details | Yes |
-| GET | `/api/knowledge/search` | Search knowledge base | Yes |
+**Login Request Example:**
+```json
+{
+  "email": "agent@realpage.com",
+  "password": "password123",
+  "user_type": "agent"  // "user" or "agent"
+}
+```
 
-### RAG Integration
+**Login Response Example:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": "AGT-001",
+    "name": "John Agent",
+    "email": "agent@realpage.com",
+    "role": "agent"
+  }
+}
+```
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/api/rag/generate` | Generate resolution from transcript | Yes |
-| POST | `/api/chatbot/message` | Chat with AI assistant | Yes |
+---
+
+### Tickets (6 endpoints)
+
+| Method | Endpoint | Request Body / Query | Response | Auth |
+|--------|----------|---------------------|----------|------|
+| `POST` | `/api/tickets/upload` | `{ tickets: [...], submitted_by }` | `{ tickets: [...] }` | Yes |
+| `GET` | `/api/tickets` | `?agent_id=` (required) | `{ tickets: [...] }` | Yes |
+| `GET` | `/api/tickets/pending` | `?agent_id=` (required) | `{ cases: [...] }` | Yes |
+| `GET` | `/api/tickets/resolved` | `?agent_id=` (required) | `{ cases: [...] }` | Yes |
+| `GET` | `/api/tickets/{id}` | - | `{ ticket: {...} }` | Yes |
+| `PATCH` | `/api/tickets/{id}` | `{ status, edited_resolution }` | `{ ticket: {...} }` | Yes |
+
+**Upload Tickets Request:**
+```json
+{
+  "tickets": [
+    {
+      "conversation_id": "CONV-12345",
+      "channel": "Chat",
+      "created_date": "2024-02-08",
+      "customer_role": "Property Manager",
+      "agent_name": "Kris",
+      "product": "RealPage Accounting",
+      "account_name": "ABC Properties",
+      "transcript": "Customer: I need help with...",
+      "property_name": "Sunset Apartments",
+      "property_city": "Dallas",
+      "property_state": "TX",
+      "contact_name": "Jane Doe",
+      "contact_role": "Manager",
+      "contact_phone": "555-123-4567"
+    }
+  ],
+  "submitted_by": "USR-001"
+}
+```
+
+**Upload Tickets Response (with RAG resolution):**
+```json
+{
+  "tickets": [
+    {
+      "ticket_id": "CS-35956164",
+      "conversation_id": "CONV-12345",
+      "category": "Certifications",
+      "status": "pending",
+      "created_at": "2024-02-08T10:00:00Z",
+      "resolution": {
+        "content": "KB: KB-094D40D3B5",
+        "relevancy_score": 85,
+        "relevancy_breakdown": {
+          "relevancy_points": 35,
+          "accuracy_points": 30,
+          "completeness_points": 20
+        },
+        "reasoning": "The generated response is relevant...",
+        "reference_article": {
+          "kb_id": "KB-094D40D3B5",
+          "script_id": "SCRIPT-0521",
+          "generated_kb_id": "KB-SYN-0127"
+        }
+      },
+      "metadata": {
+        "similarity_score": 0.5718,
+        "distance": 0.7487,
+        "priority": "High",
+        "sentiment": "Relieved"
+      }
+    }
+  ]
+}
+```
+
+**Update Ticket Status Request:**
+```json
+{
+  "status": "approved",  // "approved", "rejected", "edited"
+  "edited_resolution": "Updated resolution text..."  // optional
+}
+```
+
+---
+
+### Knowledge Base (4 endpoints)
+
+| Method | Endpoint | Request Body / Query | Response | Auth |
+|--------|----------|---------------------|----------|------|
+| `GET` | `/api/knowledge` | - | `{ articles: [...] }` | Yes |
+| `GET` | `/api/knowledge/{id}` | - | `{ article: {...} }` | Yes |
+| `POST` | `/api/knowledge` | `{ ticket_id, conversation_id, product, resolution, reference_articles }` | `{ article: {...} }` | Yes |
+| `GET` | `/api/knowledge/search` | `?q=search_query` | `{ results: [...] }` | Yes |
+
+**Add to Knowledge Base Request:**
+```json
+{
+  "ticket_id": "CS-35956164",
+  "conversation_id": "CONV-12345",
+  "product": "RealPage Accounting",
+  "resolution": "Final approved resolution text...",
+  "reference_articles": ["KB-001", "KB-023"]
+}
+```
+
+---
+
+### RAG / AI (2 endpoints)
+
+| Method | Endpoint | Request Body / Query | Response | Auth |
+|--------|----------|---------------------|----------|------|
+| `POST` | `/api/rag/generate` | `{ ticket_id }` | `{ resolution: {...} }` | Yes |
+| `GET` | `/api/rag/search` | `?q=search_query` | `{ results: [...] }` | Yes |
+
+**Generate Resolution Request:**
+```json
+{
+  "ticket_id": "CS-35956164"
+}
+```
+
+---
+
+### Chatbot (1 endpoint)
+
+| Method | Endpoint | Request Body | Response | Auth |
+|--------|----------|--------------|----------|------|
+| `POST` | `/api/chatbot/message` | `{ message, context }` | `{ response, timestamp }` | Yes |
+
+**Chatbot Request:**
+```json
+{
+  "message": "How do I resolve password reset issues?",
+  "context": {
+    "ticket_id": "CS-35956164",
+    "previous_messages": [
+      { "role": "user", "content": "Previous question..." },
+      { "role": "assistant", "content": "Previous answer..." }
+    ]
+  }
+}
+```
+
+**Chatbot Response:**
+```json
+{
+  "response": "Based on similar cases, I recommend...",
+  "timestamp": "2024-02-08T10:30:00Z"
+}
+```
+
+---
+
+### Total: 15 Endpoints
 
 ---
 

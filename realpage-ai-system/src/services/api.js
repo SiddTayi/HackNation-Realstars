@@ -75,16 +75,6 @@ export const authAPI = {
     return response;
   },
 
-  register: async (userData, userType) => {
-    return apiRequest('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...userData,
-        user_type: userType,
-      }),
-    });
-  },
-
   logout: async () => {
     const response = await apiRequest('/auth/logout', { method: 'POST' });
     localStorage.removeItem('authToken');
@@ -92,14 +82,7 @@ export const authAPI = {
     return response;
   },
 
-  refreshToken: async () => {
-    return apiRequest('/auth/refresh', { method: 'POST' });
-  },
-
-  getCurrentUser: async () => {
-    return apiRequest('/auth/me');
-  },
-};
+  };
 
 // ============================================
 // Ticket Management APIs
@@ -221,9 +204,9 @@ export const caseAPI = {
     });
   },
 
-  // Get all tickets
-  getAllTickets: async () => {
-    return apiRequest('/tickets');
+  // Get tickets assigned to agent
+  getAgentTickets: async (agentId) => {
+    return apiRequest(`/tickets?agent_id=${agentId}`);
   },
 
   // Get pending tickets for agent
