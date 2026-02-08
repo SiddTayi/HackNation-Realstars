@@ -3,7 +3,6 @@ Classification Agent for RAG System
 Uses FAISS vector store and LLM-as-judge for relevancy scoring
 """
 
-from db_scripts.db_ticket import last_row_db
 import os
 import sys
 import json
@@ -16,7 +15,9 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 # Add parent directory to path for db_scripts import
-sys.path.append(str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from db_scripts.db_ticket import last_row_db
 
 
 # Load environment variables

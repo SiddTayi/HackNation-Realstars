@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 
 # Add parent directory to path for db_scripts import
-sys.path.append(str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from db_scripts.db_scripts import retrieve_script
 from db_scripts.db_knowledge_articles import retrieve_kb, last_row_db as last_kb_id, insert_kb

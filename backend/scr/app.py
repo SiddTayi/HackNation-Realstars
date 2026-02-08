@@ -2,7 +2,10 @@
 Flask API Server for RealPage AI Resolution System
 Endpoints: Auth, Tickets, Knowledge Base, New Knowledge
 """
-
+import pandas as pd
+from openai import OpenAI
+import time
+import os
 from rag.db_scripts.db_new_knowledge import (
     insert_new_knowledge,
     retrieve_new_knowledge,
@@ -24,6 +27,8 @@ from rag.db_scripts.db_ticket import (
 )
 from rag.db_scripts.db_support_agent import retrieve_agent_by_email
 from rag.db_scripts.db_realpage_user import retrieve_user_by_email
+from rag.scripts.classification_agent import ClassificationAgent
+from rag.scripts.generation_agent import GenerationAgent
 import os
 import sys
 import sqlite3
@@ -36,6 +41,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import check_password_hash
 from dotenv import load_dotenv
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Path setup – so we can import the existing db helper modules
@@ -52,7 +58,35 @@ load_dotenv()
 # App configuration
 # ---------------------------------------------------------------------------
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*", "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], "allow_headers": ["Content-Type", "Authorization"]}})
+
+# ---------------------------------------------------------------------------
+# Initialize AI Agents (lazy loading to avoid startup issues)
+# ---------------------------------------------------------------------------
+_classification_agent = None
+_generation_agent = None
+
+def get_classification_agent():
+    """Lazy load classification agent."""
+    global _classification_agent
+    if _classification_agent is None:
+        try:
+            _classification_agent = ClassificationAgent()
+        except Exception as e:
+            print(f"Warning: Could not initialize ClassificationAgent: {e}")
+            return None
+    return _classification_agent
+
+def get_generation_agent():
+    """Lazy load generation agent."""
+    global _generation_agent
+    if _generation_agent is None:
+        try:
+            _generation_agent = GenerationAgent()
+        except Exception as e:
+            print(f"Warning: Could not initialize GenerationAgent: {e}")
+            return None
+    return _generation_agent
 
 SECRET_KEY = os.getenv("SECRET_KEY", "realpage-hackathon-secret-key")
 ALGORITHM = "HS256"
@@ -194,7 +228,7 @@ def upload_tickets():
     """
     POST /api/tickets/upload
     Body: { tickets: [...], submitted_by }
-    Creates ticket rows in realpage.db and returns them.
+    Creates ticket rows in realpage.db, processes through AI agents, and returns them.
     """
     data = request.get_json(silent=True) or {}
     tickets_data = data.get("tickets", [])
@@ -204,16 +238,24 @@ def upload_tickets():
         return jsonify({"error": "tickets array is required"}), 400
 
     created_tickets = []
+    ai_responses = []
+
+    # Get AI agents
+    classification_agent = get_classification_agent()
+    generation_agent = get_generation_agent()
 
     for t in tickets_data:
         new_id = next_ticket_id()
+        transcript = t.get("transcript", "")
+        
+        # Insert ticket into database
         row = insert_ticket(
             ticket_id=new_id,
             conversation_id=t.get("conversation_id", ""),
             channel=t.get("channel"),
             customer_role=t.get("customer_role"),
             product=t.get("product"),
-            transcript=t.get("transcript"),
+            transcript=transcript,
             first_tier_agent=t.get("agent_name"),
             status="pending",
             created_by=submitted_by,
@@ -221,10 +263,65 @@ def upload_tickets():
         )
 
         ticket = retrieve_ticket_by_id_string(new_id)
+        ai_result = None
+
+        # Process through AI agents if transcript exists and agents are available
+        if transcript and classification_agent:
+            try:
+                # Step 1: Classification - analyze transcript and find similar cases
+                print(f"\n[AI] Processing ticket {new_id} through Classification Agent...")
+                classification_output = classification_agent.classify_query(
+                    query=transcript,
+                    top_k=3,
+                    return_all=False
+                )
+
+                # Step 2: Generation - generate resolution based on classification
+                generation_output = None
+                if generation_agent and classification_output:
+                    print(f"[AI] Processing ticket {new_id} through Generation Agent...")
+                    generation_output = generation_agent.generate(classification_output)
+
+                # Build AI result
+                ai_result = {
+                    "ticket_id": new_id,
+                    "classification": classification_output,
+                    "generation": generation_output,
+                }
+
+                # Update ticket with AI-generated resolution if available
+                if classification_output:
+                    rag_response = classification_output.get("RAG_response", {})
+                    ai_resolution = rag_response.get("generated_answer", "")
+                    relevancy_score = rag_response.get("resolution", {}).get("relevancy_score", 0)
+                    
+                    # Update ticket with AI resolution
+                    update_ticket(
+                        ticket["id"],
+                        ai_resolution=ai_resolution,
+                        relevancy_score=relevancy_score,
+                        ai_metadata=json.dumps(classification_output),
+                    )
+                    
+                    # Refresh ticket data
+                    ticket = retrieve_ticket_by_id_string(new_id)
+
+                print(f"[AI] Ticket {new_id} processed successfully")
+
+            except Exception as e:
+                print(f"[AI] Error processing ticket {new_id}: {e}")
+                ai_result = {"ticket_id": new_id, "error": str(e)}
+
         if ticket:
             created_tickets.append(ticket)
+        if ai_result:
+            ai_responses.append(ai_result)
 
-    return jsonify({"tickets": created_tickets}), 201
+    return jsonify({
+        "tickets": created_tickets,
+        "ai_processing": ai_responses,
+        "total_processed": len(created_tickets),
+    }), 201
 
 
 @app.route("/api/tickets/pending", methods=["GET"])
