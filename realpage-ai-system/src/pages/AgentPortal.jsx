@@ -26,7 +26,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Badge, PriorityBadge, StatusBadge } from '../components/ui/Badge';
-import { caseAPI } from '../services/api';
+import { caseAPI, knowledgeAPI } from '../services/api';
 import { cn, formatDate } from '../lib/utils';
 
 export function AgentPortal({ user, onLogout, onSelectCase }) {
@@ -45,164 +45,22 @@ export function AgentPortal({ user, onLogout, onSelectCase }) {
   const [ticketSearchQuery, setTicketSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  
+  // Knowledge articles state
+  const [knowledgeArticles, setKnowledgeArticles] = useState([]);
 
-  // Mock knowledge articles data
-  const knowledgeArticles = [
-    {
-      id: 'KB-SYN-0127',
-      title: 'Resolving Payment Gateway 504 Timeout Issues',
-      product: 'PropertySuite Payments',
-      category: 'Payments',
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      sourceTicket: 'CS-35956164',
-      views: 45,
-      content: `## Problem Description
-Users experiencing 504 timeout errors when processing bulk rent collection for properties with 100+ units.
-
-## Root Cause
-The payment gateway has a default timeout of 30 seconds, which is insufficient for large batch operations.
-
-## Solution
-1. **Increase Gateway Timeout**: Update the payment gateway configuration to extend timeout to 120 seconds for bulk operations.
-2. **Implement Batch Processing**: Split large collections into smaller batches of 25 units each.
-3. **Add Retry Logic**: Implement exponential backoff retry for failed transactions.
-
-## Implementation
-\`\`\`javascript
-// Update gateway config
-const gatewayConfig = {
-  timeout: 120000, // 2 minutes
-  batchSize: 25,
-  maxRetries: 3
-};
-\`\`\`
-
-## Prevention
-- Monitor gateway response times
-- Set up alerts for timeout spikes
-- Consider async processing for large batches`,
-      referenceKb: 'KB-094D40D3B5',
-      referenceScript: 'SCRIPT-0521',
-    },
-    {
-      id: 'KB-SYN-0126',
-      title: 'Certification Renewal Process for Affordable Housing',
-      product: 'PropertySuite Affordable',
-      category: 'Certifications',
-      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      sourceTicket: 'CS-35891234',
-      views: 78,
-      content: `## Overview
-Guide for handling annual certification renewals for affordable housing compliance.
-
-## Process Steps
-1. **Generate Renewal Notices** - Send 90-day advance notices to residents
-2. **Collect Documentation** - Income verification, asset statements, household composition
-3. **Calculate Income** - Use HUD guidelines for annual income calculation
-4. **Determine Rent** - Apply appropriate rent calculation based on program
-5. **Complete Certification** - Submit to compliance portal
-
-## Common Issues
-- Missing documentation delays
-- Income calculation discrepancies
-- System sync errors with state portals
-
-## Resolution Tips
-- Use the batch upload feature for multiple certifications
-- Verify SSN format before submission
-- Check for duplicate household members`,
-      referenceKb: 'KB-CERT-2024',
-      referenceScript: 'SCRIPT-0890',
-    },
-    {
-      id: 'KB-SYN-0125',
-      title: 'Bulk Rent Collection Error Handling',
-      product: 'PropertySuite Accounting',
-      category: 'Accounting',
-      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      sourceTicket: 'CS-35956100',
-      views: 23,
-      content: `## Issue
-Bulk rent collection fails silently for some units.
-
-## Diagnosis
-Check the batch processing logs for specific unit failures.
-
-## Common Causes
-1. Invalid bank account information
-2. Insufficient funds flagged accounts
-3. Duplicate transaction attempts
-
-## Solution
-Implement transaction validation before batch submission and add detailed error reporting per unit.`,
-      referenceKb: 'KB-ACC-1001',
-      referenceScript: 'SCRIPT-0445',
-    },
-    {
-      id: 'KB-SYN-0124',
-      title: 'User Authentication Token Expiry Solutions',
-      product: 'PropertySuite Core',
-      category: 'Authentication',
-      createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      sourceTicket: 'CS-35890001',
-      views: 156,
-      content: `## Problem
-Users getting logged out unexpectedly due to token expiry.
-
-## Solution
-1. Implement token refresh mechanism
-2. Extend session timeout to 8 hours
-3. Add "Remember Me" functionality
-
-## Configuration
-Update auth_config.yaml with new token settings.`,
-      referenceKb: 'KB-AUTH-500',
-      referenceScript: 'SCRIPT-0100',
-    },
-    {
-      id: 'KB-SYN-0123',
-      title: 'Report Generation Performance Optimization',
-      product: 'PropertySuite Analytics',
-      category: 'Reports',
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      sourceTicket: 'CS-35889500',
-      views: 89,
-      content: `## Issue
-Large property reports taking too long to generate.
-
-## Optimization Steps
-1. Enable report caching
-2. Use date range filters
-3. Schedule reports during off-peak hours
-
-## Best Practices
-- Limit to 500 units per report
-- Use summary views for large portfolios`,
-      referenceKb: 'KB-RPT-200',
-      referenceScript: 'SCRIPT-0333',
-    },
-    {
-      id: 'KB-SYN-0122',
-      title: 'Lease Renewal Notification Setup Guide',
-      product: 'PropertySuite Leasing',
-      category: 'Leasing',
-      createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      sourceTicket: 'CS-35885000',
-      views: 234,
-      content: `## Setup Process
-1. Navigate to Settings > Notifications
-2. Enable "Lease Expiration Alerts"
-3. Set notification timeline (30, 60, 90 days)
-4. Configure recipient list
-
-## Customization
-- Edit email templates
-- Add custom fields
-- Set up SMS notifications`,
-      referenceKb: 'KB-LEASE-100',
-      referenceScript: 'SCRIPT-0222',
-    },
-  ];
+  // Helper to normalize knowledge articles from new_knowledge table
+  const normalizeArticle = (article) => ({
+    id: article.knowledge_id || article.id,
+    title: article.resolution?.substring(0, 80) || 'Untitled',
+    product: article.product || 'General',
+    category: article.product || 'General',
+    createdAt: article.created_at,
+    sourceTicket: article.ticket_id || 'N/A',
+    content: article.resolution || '',
+    conversationId: article.conversation_id,
+    ...article,
+  });
 
   const handleViewArticle = (article) => {
     setSelectedArticle(article);
@@ -226,21 +84,140 @@ Large property reports taking too long to generate.
     };
   };
 
+  // Demo ticket data for demo mode
+  const demoTickets = {
+    pending: [
+      {
+        id: 1,
+        caseId: 'CS-99911001',
+        issue: 'Date advance failing with validation error - Backend certification reference is invalid',
+        category: 'Date Advance',
+        product: 'PropertySuite Affordable',
+        priority: 'high',
+        status: 'pending',
+        createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        transcript: 'Agent: Hi, how can I help you today?\nCustomer: I\'m having trouble with the date advance feature. It keeps failing with a validation error.\nAgent: I understand. Can you tell me what error message you\'re seeing?\nCustomer: It says "Backend certification reference is invalid."',
+        aiResolution: 'This issue requires running a backend data correction script to fix the invalid certification reference. Apply SCRIPT-0121 to resolve the validation mismatch.',
+        relevancyScore: 0.92,
+      },
+      {
+        id: 2,
+        caseId: 'CS-99911002',
+        issue: 'Bulk rent collection timing out for large property with 250+ units',
+        category: 'Payments',
+        product: 'PropertySuite Accounting',
+        priority: 'medium',
+        status: 'pending',
+        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        transcript: 'Customer: The bulk rent collection is timing out for our large property.\nAgent: How many units are in this property?\nCustomer: About 250 units.\nAgent: I see. Large batch operations can hit timeout limits.',
+        aiResolution: 'Increase the payment gateway timeout to 120 seconds and implement batch processing with 25 units per batch. Reference KB-SYN-0127 for detailed steps.',
+        relevancyScore: 0.88,
+      },
+      {
+        id: 3,
+        caseId: 'CS-99911003',
+        issue: 'Certification renewal failing - State portal sync error',
+        category: 'Certifications',
+        product: 'PropertySuite Affordable',
+        priority: 'high',
+        status: 'pending',
+        createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+        transcript: 'Subject: Certification renewal failing\n\nHi Support,\n\nWe are unable to complete the annual certification renewal for several residents. The system shows a sync error with the state portal.',
+        aiResolution: 'State portal sync errors typically occur due to SSN format mismatches. Verify SSN format before submission and use the batch upload feature. See KB-SYN-0126.',
+        relevancyScore: 0.85,
+      },
+    ],
+    resolved: [
+      {
+        id: 4,
+        caseId: 'CS-99910001',
+        issue: 'Users getting logged out randomly - Token expiry issue',
+        category: 'Authentication',
+        product: 'PropertySuite Core',
+        priority: 'medium',
+        status: 'approved',
+        createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+        resolvedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+        transcript: 'Customer: Users are getting logged out randomly.\nAgent: This is related to token expiry. We\'ve extended the session timeout and the issue should be resolved now.',
+        aiResolution: 'Extended JWT token expiry from 30 minutes to 8 hours for improved user experience.',
+        relevancyScore: 0.95,
+      },
+      {
+        id: 5,
+        caseId: 'CS-99910002',
+        issue: 'Lease renewal notifications not being sent',
+        category: 'Leasing',
+        product: 'PropertySuite Leasing',
+        priority: 'low',
+        status: 'approved',
+        createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+        resolvedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+        transcript: 'Customer: Lease renewal notifications are not being sent.\nAgent: I\'ve enabled the notification settings and configured the 60-day reminder.',
+        aiResolution: 'Enabled lease expiration alerts with 60-day notification timeline. See KB-SYN-0122 for setup guide.',
+        relevancyScore: 0.91,
+      },
+    ],
+  };
+
   useEffect(() => {
     loadCases();
+    loadKnowledgeArticles();
   }, []);
+
+  const loadKnowledgeArticles = async () => {
+    try {
+      const response = await knowledgeAPI.getArticles();
+      if (response.articles) {
+        setKnowledgeArticles(response.articles.map(normalizeArticle));
+      }
+    } catch (error) {
+      console.error('Error loading knowledge articles:', error);
+    }
+  };
+
+  // Helper to normalize backend data (snake_case) to frontend format (camelCase)
+  const normalizeCase = (c) => ({
+    caseId: c.ticket_id || c.caseId,
+    issue: c.issue_summary || c.transcript?.substring(0, 100) || c.issue || 'No description',
+    category: c.category || c.product || 'General',
+    priority: c.priority || 'Medium',
+    status: c.status,
+    createdAt: c.created_at || c.createdAt,
+    resolvedAt: c.resolved_at || c.resolvedAt,
+    transcript: c.transcript,
+    aiResolution: c.ai_resolution || c.original_resolution || c.aiResolution,
+    relevancyScore: c.relevancy_score || c.relevancyScore,
+    tier: c.tier,
+    assignedTo: c.assigned_to,
+    // Keep original data for detail view
+    ...c,
+  });
 
   const loadCases = async () => {
     setIsLoading(true);
     try {
+      // Use demo data if in demo mode
+      if (user?.isDemo) {
+        setPendingCases(demoTickets.pending);
+        setResolvedCases(demoTickets.resolved);
+        setIsLoading(false);
+        return;
+      }
+
       const [resolvedRes, pendingRes] = await Promise.all([
         caseAPI.getResolvedCases(user.id),
         caseAPI.getPendingCases(user.id),
       ]);
-      setResolvedCases(resolvedRes.cases);
-      setPendingCases(pendingRes.cases);
+      // Normalize backend data to frontend format
+      setResolvedCases((resolvedRes.cases || []).map(normalizeCase));
+      setPendingCases((pendingRes.cases || []).map(normalizeCase));
     } catch (error) {
       console.error('Error loading cases:', error);
+      // Fallback to demo data on error
+      if (user?.isDemo) {
+        setPendingCases(demoTickets.pending);
+        setResolvedCases(demoTickets.resolved);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -570,7 +547,7 @@ Large property reports taking too long to generate.
                       <div className="space-y-3">
                         {filteredPendingCases.map((caseItem) => (
                           <div
-                            key={caseItem.caseId}
+                            key={caseItem.ticket_id}
                             onClick={() => onSelectCase(caseItem)}
                             className="bg-dark-700/50 rounded-lg p-4 border border-dark-600 hover:border-primary-500/50 hover:bg-dark-700/80 transition-all cursor-pointer group"
                           >
@@ -580,7 +557,7 @@ Large property reports taking too long to generate.
                                 <>
                                   <div className="flex items-start justify-between gap-2 mb-2">
                                     <p className="text-xs text-primary-400 font-mono">
-                                      {caseItem.caseId}
+                                      {caseItem.ticket_id}
                                     </p>
                                     {sla.isBreached ? (
                                       <Badge variant="danger" className="text-xs">
@@ -650,23 +627,21 @@ Large property reports taking too long to generate.
                   >
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <Badge variant="primary" className="text-xs">
-                        {article.id}
+                        {article.knowledge_id}
                       </Badge>
-                      <span className="text-xs text-dark-500">{article.views} views</span>
                     </div>
                     <h3 className="text-white font-medium mb-2 line-clamp-2">
-                      {article.title}
+                      {article.resolution?.substring(0, 80) || 'No resolution'}
                     </h3>
                     <div className="flex flex-wrap gap-2 mb-3">
-                      <Badge variant="info" className="text-xs">{article.category}</Badge>
-                      <Badge variant="secondary" className="text-xs">{article.product}</Badge>
+                      <Badge variant="info" className="text-xs">{article.product || 'General'}</Badge>
                     </div>
                     <div className="flex items-center justify-between text-xs mb-3">
                       <span className="text-dark-400">
-                        From: <span className="text-primary-400 font-mono">{article.sourceTicket}</span>
+                        From: <span className="text-primary-400 font-mono">{article.ticket_id || 'N/A'}</span>
                       </span>
                       <span className="text-dark-500">
-                        {formatDate(article.createdAt)}
+                        {formatDate(article.created_at)}
                       </span>
                     </div>
                     <Button
@@ -742,7 +717,7 @@ Large property reports taking too long to generate.
             </CardHeader>
             <CardContent>
               {/* Tickets Table */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-scroll h-[calc(100vh-20rem)]">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-dark-700">

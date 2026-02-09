@@ -6,10 +6,35 @@ Generates KB articles and Scripts based on classification output
 import os
 import sys
 import json
+import re
 from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
 from datetime import datetime
+
+
+def repair_json(json_str):
+    """Attempt to repair malformed JSON from LLM responses."""
+    # Remove any trailing commas before } or ]
+    json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+    
+    # Fix unescaped newlines in strings
+    # This is a simplified approach - replace literal newlines with \n
+    lines = json_str.split('\n')
+    fixed_lines = []
+    in_string = False
+    for line in lines:
+        # Count unescaped quotes to track if we're in a string
+        quote_count = len(re.findall(r'(?<!\\)"', line))
+        if in_string:
+            # We're continuing a string from previous line
+            fixed_lines[-1] += '\\n' + line
+        else:
+            fixed_lines.append(line)
+        # Update in_string state
+        in_string = (quote_count % 2 == 1) != in_string
+    
+    return '\n'.join(fixed_lines)
 
 # Add parent directory to path for db_scripts import
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -156,7 +181,25 @@ Make the article clear, actionable, and well-structured."""
         elif "```" in response_text:
             response_text = response_text.split("```")[1].split("```")[0].strip()
         
-        kb_data = json.loads(response_text)
+        # Try to parse JSON, with repair attempt if it fails
+        try:
+            kb_data = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            print(f"  JSON parse error: {e}")
+            print(f"  Attempting to repair JSON...")
+            repaired = repair_json(response_text)
+            try:
+                kb_data = json.loads(repaired)
+                print(f"  ✓ JSON repaired successfully")
+            except json.JSONDecodeError:
+                print(f"  ✗ Could not repair JSON, using fallback")
+                kb_data = {
+                    'title': 'Support Resolution Article',
+                    'body': 'Article generation failed. Please review the original ticket.',
+                    'tags': 'auto-generated',
+                    'module': 'General',
+                    'category': 'Support'
+                }
         
         print(f"✓ KB article generated successfully")
         print(f"  Title: {kb_data['title'][:60]}...")
@@ -295,7 +338,36 @@ Make both outputs clear, actionable, and professional."""
         elif "```" in response_text:
             response_text = response_text.split("```")[1].split("```")[0].strip()
         
-        generated_data = json.loads(response_text)
+        # Try to parse JSON, with repair attempt if it fails
+        try:
+            generated_data = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            print(f"  JSON parse error: {e}")
+            print(f"  Attempting to repair JSON...")
+            repaired = repair_json(response_text)
+            try:
+                generated_data = json.loads(repaired)
+                print(f"  ✓ JSON repaired successfully")
+            except json.JSONDecodeError:
+                # Last resort: return a default structure
+                print(f"  ✗ Could not repair JSON, using fallback")
+                generated_data = {
+                    'script': {
+                        'title': 'Auto-generated Script',
+                        'purpose': 'Generated from support ticket',
+                        'inputs': 'See script comments',
+                        'module': 'General',
+                        'category': 'Support',
+                        'code': '-- Script generation failed, manual review needed'
+                    },
+                    'kb_article': {
+                        'title': 'Support Resolution Article',
+                        'body': 'Article generation failed. Please review the original ticket.',
+                        'tags': 'auto-generated',
+                        'module': 'General',
+                        'category': 'Support'
+                    }
+                }
         
         print(f"✓ Script and KB article generated successfully")
         print(f"  Script Title: {generated_data['script']['title'][:60]}...")

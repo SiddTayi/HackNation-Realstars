@@ -81,6 +81,30 @@ def retrieve_agent_by_email(email):
     return None
 
 
+def retrieve_agent_by_agent_id(agent_id_str):
+    """
+    Retrieve a support agent by their agent_id string (e.g., 'agent1', 'agent2').
+
+    Args:
+        agent_id_str (str): Agent ID string like 'agent1', 'agent2', 'agent3'
+
+    Returns:
+        dict: Agent data with all columns, or None if not found
+    """
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM support_agent WHERE agent_id = ?", (agent_id_str,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return dict(row)
+    return None
+
+
 def insert_agent(**kwargs):
     """
     Insert a new support agent into the database.

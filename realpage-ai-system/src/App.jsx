@@ -15,6 +15,18 @@ function App() {
     }
   };
 
+  const handleDemoMode = (demoRole) => {
+    const demoUser = {
+      id: 'demo',
+      name: demoRole === 'user' ? 'Demo User' : 'Demo Agent',
+      email: demoRole === 'user' ? 'demo@realpage.com' : 'agent@realpage.com',
+      role: demoRole,
+      isDemo: true,
+    };
+    setUser(demoUser);
+    setCurrentView(demoRole === 'user' ? 'userPortal' : 'agentPortal');
+  };
+
   const handleLogout = () => {
     setUser(null);
     setCurrentView('login');
@@ -33,7 +45,7 @@ function App() {
 
   // Render based on current view
   if (currentView === 'login' || !user) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} onDemoMode={handleDemoMode} />;
   }
 
   if (currentView === 'userPortal' && user.role === 'user') {

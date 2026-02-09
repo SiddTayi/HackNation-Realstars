@@ -260,11 +260,13 @@ export const knowledgeAPI = {
     return apiRequest('/knowledge', {
       method: 'POST',
       body: JSON.stringify({
-        ticket_id: ticketData.ticketId,
-        conversation_id: ticketData.conversationId,
-        product: ticketData.product,
+        ticket_id: ticketData.ticket_id,
+        issue_summary: ticketData.issue_summary,
         resolution: ticketData.resolution,
-        reference_articles: ticketData.referenceArticles,
+        category: ticketData.category,
+        product: ticketData.product,
+        root_cause: ticketData.root_cause,
+        tags: ticketData.tags,
       }),
     });
   },

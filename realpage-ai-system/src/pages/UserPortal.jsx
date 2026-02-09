@@ -25,11 +25,61 @@ import { Badge, PriorityBadge } from '../components/ui/Badge';
 import { caseAPI } from '../services/api';
 import { cn } from '../lib/utils';
 
+// Demo tickets for demo mode
+const demoSubmittedTickets = [
+  {
+    id: 1,
+    ticket_id: 'CS-99911001',
+    conversation_id: 'CONV-2024-001',
+    channel: 'Chat',
+    customer_role: 'Property Manager',
+    product: 'PropertySuite Affordable',
+    transcript: 'Agent: Hi, how can I help you today?\nCustomer: I\'m having trouble with the date advance feature. It keeps failing with a validation error.\nAgent: I understand. Can you tell me what error message you\'re seeing?\nCustomer: It says "Backend certification reference is invalid."\nAgent: Let me check that for you.',
+    status: 'pending',
+    priority: 'high',
+    category: 'Date Advance',
+    created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    ai_resolution: 'This issue requires running a backend data correction script to fix the invalid certification reference.',
+    relevancy_score: 0.92,
+  },
+  {
+    id: 2,
+    ticket_id: 'CS-99911002',
+    conversation_id: 'CONV-2024-002',
+    channel: 'Phone',
+    customer_role: 'Accountant',
+    product: 'PropertySuite Accounting',
+    transcript: 'Customer: The bulk rent collection is timing out.\nAgent: How many units?\nCustomer: About 250 units.\nAgent: Large batch operations can hit timeout limits.',
+    status: 'pending',
+    priority: 'medium',
+    category: 'Payments',
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    ai_resolution: 'Increase payment gateway timeout to 120 seconds and implement batch processing.',
+    relevancy_score: 0.88,
+  },
+  {
+    id: 3,
+    ticket_id: 'CS-99911003',
+    conversation_id: 'CONV-2024-003',
+    channel: 'Email',
+    customer_role: 'Compliance Officer',
+    product: 'PropertySuite Affordable',
+    transcript: 'Subject: Certification renewal failing\n\nWe are unable to complete the annual certification renewal. The system shows a sync error with the state portal.',
+    status: 'approved',
+    priority: 'high',
+    category: 'Certifications',
+    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    ai_resolution: 'State portal sync errors occur due to SSN format mismatches. Verify SSN format before submission.',
+    relevancy_score: 0.85,
+  },
+];
+
 export function UserPortal({ user, onLogout }) {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(user?.isDemo ? 3 : 1);
   const [selectedFile, setSelectedFile] = useState(null);
   const [parsedTickets, setParsedTickets] = useState([]);
-  const [submittedTickets, setSubmittedTickets] = useState([]);
+  const [submittedTickets, setSubmittedTickets] = useState(user?.isDemo ? demoSubmittedTickets : []);
+  const [aiProcessing, setAiProcessing] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [parseError, setParseError] = useState('');
@@ -85,7 +135,8 @@ export function UserPortal({ user, onLogout }) {
     try {
       const response = await caseAPI.submitTickets(parsedTickets);
       if (response.success) {
-        setSubmittedTickets(response.tickets);
+        setSubmittedTickets(response.tickets || []);
+        setAiProcessing(response.ai_processing || []);
         setCurrentStep(3);
       }
     } catch (error) {
@@ -398,31 +449,50 @@ export function UserPortal({ user, onLogout }) {
                       </div>
 
                       <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin">
-                        {submittedTickets.map((ticketItem) => (
-                          <div
-                            key={ticketItem.ticketId}
-                            className="bg-dark-700/50 rounded-lg p-4 border border-dark-600"
-                          >
-                            <div className="flex items-start justify-between gap-4 mb-3">
-                              <div>
-                                <p className="text-xs text-primary-400 font-mono mb-1">
-                                  {ticketItem.ticketId}
-                                </p>
-                                <p className="text-white font-medium">{ticketItem.conversationId}</p>
+                        {submittedTickets.map((ticketItem) => {
+                          // Find matching AI processing data for this ticket
+                          const aiData = aiProcessing.find(ai => ai.ticket_id === ticketItem.ticket_id);
+                          const agentId = aiData?.classification?.RAG_response?.resolution?.agent_id || 'N/A';
+                          const tier = aiData?.classification?.RAG_response?.resolution?.tier || 'N/A';
+                          const relevancyScore = ticketItem.relevancy_score || aiData?.classification?.RAG_response?.resolution?.relevancy_score || 0;
+                          
+                          return (
+                            <div
+                              key={ticketItem.ticket_id || ticketItem.id}
+                              className="bg-dark-700/50 rounded-lg p-4 border border-dark-600"
+                            >
+                              <div className="flex items-start justify-between gap-4 mb-3">
+                                <div>
+                                  <p className="text-xs text-primary-400 font-mono mb-1">
+                                    {ticketItem.ticket_id}
+                                  </p>
+                                  <p className="text-white font-medium">{ticketItem.conversation_id}</p>
+                                </div>
+                                <Badge variant={ticketItem.status === 'pending' ? 'warning' : 'success'}>
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  {ticketItem.status || 'Pending'}
+                                </Badge>
                               </div>
-                              <Badge variant="warning">
-                                <Clock className="w-3 h-3 mr-1" />
-                                Pending
-                              </Badge>
+                              <div className="flex items-center gap-4 text-sm flex-wrap">
+                                <span className="text-dark-400">
+                                  Assigned: <span className="text-primary-400 font-medium">{agentId}</span>
+                                </span>
+                                <span className="text-dark-400">
+                                  Tier: <span className="text-white">{tier}</span>
+                                </span>
+                                <span className="text-dark-400">
+                                  Relevancy: <span className="text-accent-400">{relevancyScore}%</span>
+                                </span>
+                              </div>
+                              {ticketItem.ai_resolution && (
+                                <div className="mt-3 pt-3 border-t border-dark-600">
+                                  <p className="text-xs text-dark-400 mb-1">AI Resolution:</p>
+                                  <p className="text-sm text-dark-300 line-clamp-2">{ticketItem.ai_resolution}</p>
+                                </div>
+                              )}
                             </div>
-                            <div className="flex items-center gap-4 text-sm">
-                              <span className="text-dark-400">
-                                Agent: <span className="text-white">{ticketItem.agentName}</span>
-                              </span>
-                              <PriorityBadge priority={ticketItem.metadata?.priority || 'Medium'} />
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       <div className="flex justify-center pt-4">
@@ -433,6 +503,7 @@ export function UserPortal({ user, onLogout }) {
                             setSelectedFile(null);
                             setParsedTickets([]);
                             setSubmittedTickets([]);
+                            setAiProcessing([]);
                           }}
                         >
                           Submit More Tickets

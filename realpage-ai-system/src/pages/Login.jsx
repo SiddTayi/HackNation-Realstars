@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Brain, User, Headphones, ArrowRight, Sparkles, Shield, Zap } from 'lucide-react';
+import { Brain, User, Headphones, ArrowRight, Sparkles, Shield, Zap, Play } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
 import { authAPI } from '../services/api';
 
-export function Login({ onLogin }) {
+export function Login({ onLogin, onDemoMode }) {
   const [selectedRole, setSelectedRole] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -231,6 +231,38 @@ export function Login({ onLogin }) {
               Contact Admin
             </a>
           </p>
+
+          {/* Demo Mode Section */}
+          <div className="mt-8 pt-6 border-t border-dark-700">
+            <p className="text-center text-dark-400 text-sm mb-4">
+              Want to explore first?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onDemoMode?.('user')}
+                className="flex items-center justify-center gap-2"
+              >
+                <Play className="w-4 h-4" />
+                Demo as User
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onDemoMode?.('agent')}
+                className="flex items-center justify-center gap-2"
+              >
+                <Play className="w-4 h-4" />
+                Demo as Agent
+              </Button>
+            </div>
+            <p className="text-center text-dark-500 text-xs mt-3">
+              Try the full experience with sample data
+            </p>
+          </div>
         </div>
       </div>
     </div>

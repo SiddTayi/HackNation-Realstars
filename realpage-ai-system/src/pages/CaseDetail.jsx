@@ -24,7 +24,7 @@ import { caseAPI, knowledgeAPI } from '../services/api';
 import { cn, formatDate } from '../lib/utils';
 
 export function CaseDetail({ caseData, user, onLogout, onBack }) {
-  const [resolution, setResolution] = useState(caseData.aiResolution || '');
+  const [resolution, setResolution] = useState(caseData.ai_resolution || caseData.original_resolution || '');
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionTaken, setActionTaken] = useState(null);
@@ -32,12 +32,15 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
   const handleApprove = async () => {
     setIsSubmitting(true);
     try {
-      await caseAPI.updateCaseStatus(caseData.caseId, 'approved', resolution);
+      await caseAPI.updateCaseStatus(caseData.ticket_id, 'approved', resolution);
       await knowledgeAPI.addToKnowledgeBase({
-        caseId: caseData.caseId,
-        issue: caseData.issue,
+        ticket_id: caseData.ticket_id,
+        issue_summary: caseData.issue_summary,
         resolution: resolution,
         category: caseData.category,
+        product: caseData.product,
+        root_cause: caseData.root_cause,
+        tags: caseData.tags_generated_kb,
       });
       setActionTaken('approved');
     } catch (error) {
@@ -50,7 +53,7 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
   const handleReject = async () => {
     setIsSubmitting(true);
     try {
-      await caseAPI.updateCaseStatus(caseData.caseId, 'rejected', resolution);
+      await caseAPI.updateCaseStatus(caseData.ticket_id, 'rejected', resolution);
       setActionTaken('rejected');
     } catch (error) {
       console.error('Error rejecting case:', error);
@@ -62,12 +65,15 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
   const handleSaveEdit = async () => {
     setIsSubmitting(true);
     try {
-      await caseAPI.updateCaseStatus(caseData.caseId, 'edited', resolution);
+      await caseAPI.updateCaseStatus(caseData.ticket_id, 'edited', resolution);
       await knowledgeAPI.addToKnowledgeBase({
-        caseId: caseData.caseId,
-        issue: caseData.issue,
+        ticket_id: caseData.ticket_id,
+        issue_summary: caseData.issue_summary,
         resolution: resolution,
         category: caseData.category,
+        product: caseData.product,
+        root_cause: caseData.root_cause,
+        tags: caseData.tags_generated_kb,
       });
       setIsEditing(false);
       setActionTaken('edited');
@@ -117,7 +123,7 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
                   'Your updated resolution has been saved and added to the knowledge base.'}
               </p>
               <div className="flex items-center justify-center gap-2 mb-6">
-                <Badge variant="primary">{caseData.caseId}</Badge>
+                <Badge variant="primary">{caseData.ticket_id}</Badge>
                 <StatusBadge status={actionTaken} />
               </div>
               <Button onClick={onBack} className="w-full">
@@ -146,12 +152,15 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <h1 className="text-2xl font-bold text-white">{caseData.caseId}</h1>
+                  <h1 className="text-2xl font-bold text-white">{caseData.ticket_id}</h1>
                   <PriorityBadge priority={caseData.priority} />
                   <StatusBadge status={caseData.status} />
                 </div>
                 <p className="text-dark-400">
-                  Submitted by {caseData.submittedBy} • {formatDate(caseData.createdAt)}
+                  {caseData.issue_summary}
+                </p>
+                <p className="text-dark-500 text-sm mt-1">
+                  Submitted by {caseData.first_tier_agent || 'Unknown'} • {formatDate(caseData.created_at)}
                 </p>
               </div>
             </div>
@@ -175,14 +184,14 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
                       <Tag className="w-3 h-3" />
                       Case ID
                     </div>
-                    <p className="text-primary-400 font-mono font-bold">{caseData.caseId}</p>
+                    <p className="text-primary-400 font-mono font-bold">{caseData.ticket_id}</p>
                   </div>
 
                   {/* Excel Data Fields */}
                   <div className="space-y-3">
                     <div className="bg-dark-700/30 rounded-lg p-3">
                       <div className="text-dark-400 text-xs mb-1">Conversation ID</div>
-                      <p className="text-white font-medium text-sm">{caseData.conversationId || 'N/A'}</p>
+                      <p className="text-white font-medium text-sm">{caseData.conversation_id || 'N/A'}</p>
                     </div>
                     
                     <div className="bg-dark-700/30 rounded-lg p-3">
@@ -192,12 +201,12 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
 
                     <div className="bg-dark-700/30 rounded-lg p-3">
                       <div className="text-dark-400 text-xs mb-1">Created Date</div>
-                      <p className="text-white font-medium text-sm">{caseData.createdDate || formatDate(caseData.createdAt)}</p>
+                      <p className="text-white font-medium text-sm">{formatDate(caseData.created_at)}</p>
                     </div>
 
                     <div className="bg-dark-700/30 rounded-lg p-3">
                       <div className="text-dark-400 text-xs mb-1">Customer Role</div>
-                      <p className="text-white font-medium text-sm">{caseData.customerRole || 'N/A'}</p>
+                      <p className="text-white font-medium text-sm">{caseData.customer_role || 'N/A'}</p>
                     </div>
 
                     <div className="bg-dark-700/30 rounded-lg p-3">
@@ -205,7 +214,7 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
                         <User className="w-3 h-3" />
                         First Tier Agent
                       </div>
-                      <p className="text-white font-medium text-sm">{caseData.agentName || caseData.submittedBy || 'Unassigned'}</p>
+                      <p className="text-white font-medium text-sm">{caseData.first_tier_agent || 'Unassigned'}</p>
                     </div>
 
                     <div className="bg-dark-700/30 rounded-lg p-3">
@@ -214,30 +223,41 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
                     </div>
 
                     <div className="bg-dark-700/30 rounded-lg p-3">
-                      <div className="text-dark-400 text-xs mb-1">Account Name</div>
-                      <p className="text-white font-medium text-sm">{caseData.accountName || 'N/A'}</p>
-                    </div>
-
-                    {/* Property Info */}
-                    <div className="bg-dark-700/30 rounded-lg p-3">
-                      <div className="text-dark-400 text-xs mb-1">Property</div>
+                      <div className="text-dark-400 text-xs mb-1">Tier / Answer Type</div>
                       <p className="text-white font-medium text-sm">
-                        {caseData.propertyName || 'N/A'}
-                        {caseData.propertyCity && `, ${caseData.propertyCity}`}
-                        {caseData.propertyState && `, ${caseData.propertyState}`}
+                        <Badge variant="info" className="mr-2">{caseData.tier || 'N/A'}</Badge>
+                        {caseData.answer_type || 'N/A'}
                       </p>
                     </div>
 
-                    {/* Contact Info */}
+                    {/* Root Cause */}
+                    {caseData.root_cause && (
+                      <div className="bg-dark-700/30 rounded-lg p-3">
+                        <div className="text-dark-400 text-xs mb-1">Root Cause</div>
+                        <p className="text-white font-medium text-sm">{caseData.root_cause}</p>
+                      </div>
+                    )}
+
+                    {/* KB Article ID */}
+                    {caseData.kb_article_id && (
+                      <div className="bg-dark-700/30 rounded-lg p-3">
+                        <div className="text-dark-400 text-xs mb-1">KB Article</div>
+                        <p className="text-primary-400 font-mono text-sm">{caseData.kb_article_id}</p>
+                      </div>
+                    )}
+
+                    {/* Script ID */}
+                    {caseData.script_id && (
+                      <div className="bg-dark-700/30 rounded-lg p-3">
+                        <div className="text-dark-400 text-xs mb-1">Script ID</div>
+                        <p className="text-accent-400 font-mono text-sm">{caseData.script_id}</p>
+                      </div>
+                    )}
+
+                    {/* Sentiment */}
                     <div className="bg-dark-700/30 rounded-lg p-3">
-                      <div className="text-dark-400 text-xs mb-1">Contact</div>
-                      <p className="text-white font-medium text-sm">
-                        {caseData.contactName || 'N/A'}
-                        {caseData.contactRole && ` (${caseData.contactRole})`}
-                      </p>
-                      {caseData.contactPhone && (
-                        <p className="text-dark-400 text-xs mt-1">{caseData.contactPhone}</p>
-                      )}
+                      <div className="text-dark-400 text-xs mb-1">Sentiment</div>
+                      <p className="text-white font-medium text-sm">{caseData.sentiment || 'N/A'}</p>
                     </div>
                   </div>
 
@@ -315,7 +335,7 @@ export function CaseDetail({ caseData, user, onLogout, onBack }) {
                           className="flex-1"
                           onClick={() => {
                             setIsEditing(false);
-                            setResolution(caseData.aiResolution);
+                            setResolution(caseData.ai_resolution || caseData.original_resolution || '');
                           }}
                         >
                           Cancel

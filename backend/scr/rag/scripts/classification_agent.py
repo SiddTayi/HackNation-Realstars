@@ -141,7 +141,7 @@ Based on the above context, provide a clear and helpful response to the query.""
 
         # Generate response
         response = self.client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -190,7 +190,7 @@ Provide your evaluation as a JSON object with:
 Respond ONLY with the JSON object, no other text."""
 
         response = self.client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert evaluator. Respond only with valid JSON."},
                 {"role": "user", "content": judge_prompt}
@@ -232,16 +232,22 @@ Respond ONLY with the JSON object, no other text."""
         kb_content = data.get('KB_Article_ID_x', 'N/A')
         script_content = data.get('Script_ID', 'N/A')
 
-        # Determine content type and value
+        # Determine content type, value, and tier-based agent_id
         if kb_content and kb_content != 'N/A' and str(kb_content).lower() != 'nan':
             content_type = "KB"
             content_value = kb_content
+            tier = 1
         elif script_content and script_content != 'N/A' and str(script_content).lower() != 'nan':
             content_type = "Script"
             content_value = script_content
+            tier = 3
         else:
             content_type = "Resolution"
             content_value = data.get('Resolution', 'N/A')
+            tier = 2
+        
+        # Set agent_id based on tier classification
+        agent_id = f"agent{tier}"
 
         output = {
             "RAG_response": {
@@ -257,7 +263,8 @@ Respond ONLY with the JSON object, no other text."""
                 "answer_type": str(data.get('Answer_Type', 'N/A')),
                 "resolution": {
                     "content": f"{content_type}: {content_value}",
-                    "agent_id": str(data.get('Agent_Name', 'N/A')),
+                    "agent_id": agent_id,
+                    "tier": tier,
                     "relevancy_score": relevancy_result['score'],
                     "relevancy_breakdown": {
                         "relevancy_points": relevancy_result['relevancy_points'],

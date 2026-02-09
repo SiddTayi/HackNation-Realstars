@@ -25,7 +25,7 @@ from rag.db_scripts.db_ticket import (
     get_tickets_by_status,
     last_row_db as next_ticket_id,
 )
-from rag.db_scripts.db_support_agent import retrieve_agent_by_email
+from rag.db_scripts.db_support_agent import retrieve_agent_by_email, retrieve_agent_by_agent_id
 from rag.db_scripts.db_realpage_user import retrieve_user_by_email
 from rag.scripts.classification_agent import ClassificationAgent
 from rag.scripts.generation_agent import GenerationAgent
@@ -293,14 +293,25 @@ def upload_tickets():
                 if classification_output:
                     rag_response = classification_output.get("RAG_response", {})
                     ai_resolution = rag_response.get("generated_answer", "")
-                    relevancy_score = rag_response.get("resolution", {}).get("relevancy_score", 0)
+                    resolution_data = rag_response.get("resolution", {})
+                    relevancy_score = resolution_data.get("relevancy_score", 0)
+                    tier_agent_id = resolution_data.get("agent_id", "agent1")
+                    tier = resolution_data.get("tier", 1)
                     
-                    # Update ticket with AI resolution
+                    # Look up the support agent by tier-based agent_id
+                    assigned_agent = retrieve_agent_by_agent_id(tier_agent_id)
+                    assigned_to_id = assigned_agent["id"] if assigned_agent else None
+                    
+                    print(f"[AI] Assigning ticket {new_id} to {tier_agent_id} (tier {tier})")
+                    
+                    # Update ticket with AI resolution and assignment
                     update_ticket(
                         ticket["id"],
                         ai_resolution=ai_resolution,
                         relevancy_score=relevancy_score,
                         ai_metadata=json.dumps(classification_output),
+                        assigned_to=assigned_to_id,
+                        tier=f"tier{tier}",
                     )
                     
                     # Refresh ticket data
@@ -329,8 +340,7 @@ def upload_tickets():
 def get_pending_tickets():
     """
     GET /api/tickets/pending?agent_id=agent1
-    Returns tickets with status='pending'.
-    Optional agent_id filters by first_tier_agent (looked up via support_agent table).
+    Returns tickets with status='pending' assigned to the specified agent.
     """
     agent_id_param = request.args.get("agent_id")
 
@@ -338,16 +348,17 @@ def get_pending_tickets():
     cursor = conn.cursor()
 
     if agent_id_param:
-        # Look up the agent's username from support_agent table
+        # Look up the agent's database ID from support_agent table
         cursor.execute(
-            "SELECT username FROM support_agent WHERE agent_id = ?",
+            "SELECT id FROM support_agent WHERE agent_id = ?",
             (agent_id_param,),
         )
         agent_row = cursor.fetchone()
         if agent_row:
+            # Filter by assigned_to (agent's database ID)
             cursor.execute(
-                "SELECT * FROM ticket WHERE status = 'pending' AND first_tier_agent = ?",
-                (agent_row["username"],),
+                "SELECT * FROM ticket WHERE status = 'pending' AND assigned_to = ?",
+                (agent_row["id"],),
             )
         else:
             # No matching agent – return empty
@@ -367,8 +378,7 @@ def get_pending_tickets():
 def get_resolved_tickets():
     """
     GET /api/tickets/resolved?agent_id=agent1
-    Returns tickets with status IN ('approved', 'rejected').
-    Optional agent_id filters by first_tier_agent.
+    Returns tickets with status IN ('approved', 'rejected') assigned to the specified agent.
     """
     agent_id_param = request.args.get("agent_id")
 
@@ -377,14 +387,14 @@ def get_resolved_tickets():
 
     if agent_id_param:
         cursor.execute(
-            "SELECT username FROM support_agent WHERE agent_id = ?",
+            "SELECT id FROM support_agent WHERE agent_id = ?",
             (agent_id_param,),
         )
         agent_row = cursor.fetchone()
         if agent_row:
             cursor.execute(
-                "SELECT * FROM ticket WHERE status IN ('approved', 'rejected') AND first_tier_agent = ?",
-                (agent_row["username"],),
+                "SELECT * FROM ticket WHERE status IN ('approved', 'rejected') AND assigned_to = ?",
+                (agent_row["id"],),
             )
         else:
             conn.close()
@@ -462,14 +472,9 @@ def patch_ticket(ticket_id):
 def list_knowledge():
     """
     GET /api/knowledge
-    Returns all KB articles from knowledge_articles.db.
+    Returns all knowledge articles from new_knowledge table in realpage.db.
     """
-    conn = _get_kb_conn()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM knowledge_articles ORDER BY Created_At DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    articles = [dict(r) for r in rows]
+    articles = list_new_knowledge()
     return jsonify({"articles": articles}), 200
 
 
@@ -491,7 +496,7 @@ def get_knowledge(kb_id):
 def create_knowledge():
     """
     POST /api/knowledge
-    Body: { ticket_id, conversation_id, product, resolution, reference_articles }
+    Body: { ticket_id, issue_summary, resolution, category, product, root_cause, tags }
     Dual-write: inserts into knowledge_articles.db AND new_knowledge table in realpage.db.
     """
     data = request.get_json(silent=True) or {}
@@ -502,18 +507,22 @@ def create_knowledge():
     now = datetime.now(timezone.utc).isoformat()
     new_id = next_kb_id()
 
-    # Build tags from product + any reference info
+    # Extract fields
+    ticket_id = data.get("ticket_id", "")
+    issue_summary = data.get("issue_summary", "")
+    category = data.get("category", "")
     product = data.get("product", "")
-    tags = product  # simple tag from product
+    root_cause = data.get("root_cause", "")
+    tags = data.get("tags", product)  # fallback to product if no tags
 
     # 1) Insert into knowledge_articles.db
     kb_row = {
         "KB_Article_ID": new_id,
-        "Title": f"Resolution for {data.get('ticket_id', 'ticket')}",
+        "Title": issue_summary or f"Resolution for {ticket_id}",
         "Body": resolution,
         "Tags": tags,
         "Module": product,
-        "Category": product,
+        "Category": category or product,
         "Created_At": now,
         "Updated_At": now,
         "Status": "Active",
@@ -525,24 +534,20 @@ def create_knowledge():
         return jsonify({"error": "Failed to create KB article"}), 500
 
     # 2) Also insert into new_knowledge table in realpage.db
-    ref_articles = data.get("reference_articles", [])
-    if isinstance(ref_articles, list):
-        ref_articles = json.dumps(ref_articles)
-
     nk_row = {
         "knowledge_id": new_id,
-        "ticket_id": data.get("ticket_id"),
-        "conversation_id": data.get("conversation_id", ""),
+        "ticket_id": ticket_id,
+        "conversation_id": "",
         "product": product,
         "resolution": resolution,
-        "reference_articles": ref_articles,
+        "reference_articles": "",
         "created_by": request.user.get("id"),
         "created_at": now,
     }
 
     insert_new_knowledge(**nk_row)
 
-    return jsonify({"article": kb_row, "new_knowledge": nk_row}), 201
+    return jsonify({"article": kb_row, "new_knowledge": nk_row, "success": True}), 201
 
 
 @app.route("/api/knowledge/search", methods=["GET"])
