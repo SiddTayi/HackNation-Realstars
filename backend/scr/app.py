@@ -603,6 +603,77 @@ def get_new_knowledge_item(knowledge_id):
 
 
 # ===================================================================
+# RAG SEARCH ENDPOINT
+# ===================================================================
+
+@app.route("/api/rag/search", methods=["GET"])
+@token_required
+def rag_search():
+    """
+    GET /api/rag/search?q=query&top_k=3
+    Performs RAG-powered semantic search using enhanced_query.py logic
+    Returns similar tickets/cases from the vector store
+    """
+    query = request.args.get("q", "").strip()
+    top_k = int(request.args.get("top_k", 3))
+
+    if not query:
+        return jsonify({"error": "Query parameter 'q' is required"}), 400
+
+    if top_k > 10:
+        top_k = 10  # Limit to prevent excessive results
+
+    try:
+        # Import the RAG query function
+        from rag.scripts.enhanced_query import query_vectorstore
+
+        # Perform RAG search
+        results = query_vectorstore(query, top_k=top_k)
+
+        # Transform results to frontend-friendly format
+        formatted_results = []
+        for result in results:
+            doc_data = result.get('data', {})
+            formatted_results.append({
+                "caseId": doc_data.get('Ticket_Number', 'N/A'),
+                "issue": doc_data.get('Issue_Summary', doc_data.get('Subject', 'N/A')),
+                "description": doc_data.get('Description', 'N/A'),
+                "category": doc_data.get('Category_x', 'N/A'),
+                "module": doc_data.get('Module_generated_kb', 'N/A'),
+                "priority": doc_data.get('Priority', 'N/A'),
+                "tier": doc_data.get('Tier', 'N/A'),
+                "resolution": doc_data.get('Resolution', 'N/A'),
+                "rootCause": doc_data.get('Root_Cause', 'N/A'),
+                "tags": doc_data.get('Tags_generated_kb', 'N/A'),
+                "transcript": doc_data.get('Transcript', 'N/A'),
+                "answerType": doc_data.get('Answer_Type', 'N/A'),
+                "relevanceScore": result.get('similarity_score', 0),
+                "distance": result.get('distance', 0),
+            })
+
+        return jsonify({
+            "success": True,
+            "query": query,
+            "results": formatted_results,
+            "total": len(formatted_results),
+        }), 200
+
+    except FileNotFoundError as e:
+        return jsonify({
+            "error": "Vector store not found. Please ensure the RAG system has been initialized.",
+            "details": str(e)
+        }), 404
+    except Exception as e:
+        print(f"Error in RAG search: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "Failed to perform RAG search",
+            "details": str(e)
+        }), 500
+
+
+# ===================================================================
 # Entry point
 # ===================================================================
 

@@ -386,7 +386,7 @@ Approved resolutions added to knowledge base
 | Method | Endpoint | Request Body / Query | Response | Auth |
 |--------|----------|---------------------|----------|------|
 | `POST` | `/api/rag/generate` | `{ ticket_id }` | `{ resolution: {...} }` | Yes |
-| `GET` | `/api/rag/search` | `?q=search_query` | `{ results: [...] }` | Yes |
+| `GET` | `/api/rag/search` | `?q=search_query&top_k=3` | `{ success, query, results: [...], total }` | Yes |
 
 **Generate Resolution Request:**
 ```json
@@ -394,6 +394,86 @@ Approved resolutions added to knowledge base
   "ticket_id": "CS-35956164"
 }
 ```
+
+**RAG Search Request:**
+```
+GET /api/rag/search?q=certification%20issues&top_k=5
+```
+
+**Query Parameters:**
+- `q` (required): Search query - can be a short question or full conversation transcript
+- `top_k` (optional): Number of results to return (default: 3, max: 10)
+
+**RAG Search Response:**
+```json
+{
+  "success": true,
+  "query": "certification issues",
+  "results": [
+    {
+      "caseId": "CS-35956164",
+      "issue": "Certification renewal failing - State portal sync error",
+      "description": "Customer unable to complete annual certification renewal",
+      "category": "Certifications",
+      "module": "PropertySuite Affordable",
+      "priority": "High",
+      "tier": "3",
+      "resolution": "State portal sync errors typically occur due to SSN format mismatches. Verify SSN format before submission and use the batch upload feature. See KB-SYN-0126.",
+      "rootCause": "Data Format Mismatch",
+      "tags": "certification, state portal, sync error",
+      "transcript": "Full conversation transcript...",
+      "answerType": "SEED_KB",
+      "relevanceScore": 0.8542,
+      "distance": 0.2487
+    },
+    {
+      "caseId": "CS-35956165",
+      "issue": "Date advance failing with validation error",
+      "description": "Backend certification reference is invalid",
+      "category": "Date Advance",
+      "module": "PropertySuite Affordable",
+      "priority": "High",
+      "tier": "3",
+      "resolution": "Apply SCRIPT-0121 to resolve the validation mismatch.",
+      "rootCause": "Backend Data Corruption",
+      "tags": "date advance, validation, backend",
+      "transcript": "Full conversation transcript...",
+      "answerType": "Script",
+      "relevanceScore": 0.7819,
+      "distance": 0.3521
+    }
+  ],
+  "total": 2
+}
+```
+
+**How RAG Search Works:**
+
+1. **Query Processing**:
+   - If query > 15 words, OpenAI GPT-4o-mini summarizes it into Subject + Description format
+   - Query is embedded using OpenAI `text-embedding-3-small` model
+
+2. **Semantic Search**:
+   - FAISS vector store performs similarity search across 722 support tickets
+   - Returns top-k most semantically similar tickets based on embeddings
+
+3. **Result Ranking**:
+   - Results ranked by `relevanceScore` (similarity score: 0-1)
+   - Lower `distance` = higher similarity
+   - Includes full ticket details: issue, resolution, category, priority, tier, root cause
+
+4. **Use Cases**:
+   - Find similar cases from knowledge base
+   - Get AI-powered resolution suggestions
+   - Search by natural language queries or full transcripts
+   - Identify patterns across support tickets
+
+**Example Queries:**
+- "Customer can't log in on mobile app"
+- "Show me billing error cases"
+- "What was the resolution for Case #12345?"
+- "Similar cases to password reset issues"
+- Full conversation transcripts (automatically summarized)
 
 ---
 

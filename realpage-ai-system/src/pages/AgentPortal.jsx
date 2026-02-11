@@ -26,7 +26,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Badge, PriorityBadge, StatusBadge } from '../components/ui/Badge';
-import { caseAPI, knowledgeAPI } from '../services/api';
+import { caseAPI, knowledgeAPI, ragAPI } from '../services/api';
 import { cn, formatDate } from '../lib/utils';
 
 export function AgentPortal({ user, onLogout, onSelectCase }) {
@@ -231,10 +231,17 @@ export function AgentPortal({ user, onLogout, onSelectCase }) {
 
     setIsSearching(true);
     try {
-      const response = await caseAPI.searchCases(searchQuery);
-      setSearchResults(response.results);
+      // Use RAG-powered search from enhanced_query.py
+      const response = await ragAPI.searchSimilar(searchQuery);
+      if (response.success && response.results) {
+        setSearchResults(response.results);
+      } else {
+        setSearchResults([]);
+        console.error('Search failed:', response.error);
+      }
     } catch (error) {
       console.error('Error searching:', error);
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
@@ -474,18 +481,42 @@ export function AgentPortal({ user, onLogout, onSelectCase }) {
                         {searchResults.map((result, index) => (
                           <div
                             key={index}
-                            className="bg-dark-700/50 rounded-lg p-4 border border-dark-600"
+                            className="bg-dark-700/50 rounded-lg p-4 border border-dark-600 hover:border-primary-500/50 transition-all"
                           >
-                            <div className="flex items-start justify-between gap-4 mb-2">
+                            <div className="flex items-start justify-between gap-4 mb-3">
                               <p className="text-xs text-primary-400 font-mono">
                                 {result.caseId}
                               </p>
                               <Badge variant="success">
-                                {Math.round(result.relevanceScore * 100)}% match
+                                {Math.round((result.relevanceScore || 0) * 100)}% match
                               </Badge>
                             </div>
                             <p className="text-white font-medium mb-2">{result.issue}</p>
-                            <p className="text-dark-300 text-sm">{result.resolution}</p>
+                            {result.description && result.description !== 'N/A' && (
+                              <p className="text-dark-400 text-sm mb-3 line-clamp-2">{result.description}</p>
+                            )}
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              {result.category && result.category !== 'N/A' && (
+                                <Badge variant="info" className="text-xs">{result.category}</Badge>
+                              )}
+                              {result.priority && result.priority !== 'N/A' && (
+                                <Badge variant={result.priority === 'High' ? 'danger' : 'warning'} className="text-xs">
+                                  {result.priority}
+                                </Badge>
+                              )}
+                              {result.tier && result.tier !== 'N/A' && (
+                                <Badge variant="secondary" className="text-xs">Tier {result.tier}</Badge>
+                              )}
+                            </div>
+                            <div className="bg-dark-800/50 rounded p-3 border border-dark-600">
+                              <p className="text-xs text-dark-400 mb-1 font-medium">Resolution:</p>
+                              <p className="text-dark-200 text-sm">{result.resolution}</p>
+                            </div>
+                            {result.rootCause && result.rootCause !== 'N/A' && (
+                              <div className="mt-2 pt-2 border-t border-dark-700">
+                                <p className="text-xs text-dark-500">Root Cause: <span className="text-dark-300">{result.rootCause}</span></p>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

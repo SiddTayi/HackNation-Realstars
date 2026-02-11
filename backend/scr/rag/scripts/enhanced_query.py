@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import faiss
 import pickle
+from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -80,11 +81,13 @@ def query_vectorstore(query_text, top_k=3):
         print(f"{search_query}\n")
 
     # Load the FAISS index
-    index_path = "vector_store/faiss_index.bin"
-    index = faiss.read_index(index_path)
+    # Use absolute path based on script location
+    script_dir = Path(__file__).parent.parent  # Go up to rag/ directory
+    index_path = script_dir / "vector_store" / "faiss_index.bin"
+    index = faiss.read_index(str(index_path))
 
     # Load metadata
-    metadata_path = "vector_store/metadata.pkl"
+    metadata_path = script_dir / "vector_store" / "metadata.pkl"
     with open(metadata_path, 'rb') as f:
         metadata = pickle.load(f)
 
